@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbwarden-sandbox"
+version = "0.1.0"
+description = "Sandboxed model discovery for DBWarden"
+readme = "README.md"
+requires-python = ">=3.12.7"
+dependencies = ["dbwarden>=0.15.0"]
+
+[project.urls]
+Homepage = "https://github.com/dbwarden-org/dbwarden-sandbox"
+Source = "https://github.com/dbwarden-org/dbwarden-sandbox"
+
+[project.entry-points."dbwarden.plugins"]
+sandbox = "dbwarden_sandbox:setup"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
