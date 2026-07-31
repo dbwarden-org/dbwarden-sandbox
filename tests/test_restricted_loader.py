@@ -148,6 +148,16 @@ class TestHookRegistration:
         registrar = assert_setup_registers(
             dbwarden_sandbox.setup,
             plugin="dbwarden-sandbox",
-            value_hooks=("load_config_module", "load_model_module"),
+            value_hooks=(
+                "load_config_module",
+                "load_model_module",
+                "sandbox_provider_start",
+                "sandbox_provider_stop",
+            ),
         )
-        assert set(registrar.hooks) == {"load_config_module", "load_model_module"}
+        assert set(registrar.hooks) == {
+            "load_config_module",
+            "load_model_module",
+            "sandbox_provider_start",
+            "sandbox_provider_stop",
+        }

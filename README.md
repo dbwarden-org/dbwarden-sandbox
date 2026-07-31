@@ -1,5 +1,9 @@
 # dbwarden-sandbox
 
+[![Python](https://img.shields.io/badge/Python-3.12.7%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/dbwarden-sandbox?logo=pypi&logoColor=white&style=for-the-badge)](https://pypi.org/project/dbwarden-sandbox/)
+[![CI](https://img.shields.io/github/actions/workflow/status/dbwarden-org/dbwarden-sandbox/test.yml?logo=github&logoColor=white&style=for-the-badge)](https://github.com/dbwarden-org/dbwarden-sandbox/actions/workflows/test.yml)
+
 Sandboxed config and model loading for [DBWarden](https://github.com/dbwarden-org/dbwarden).
 
 DBWarden discovers configuration by scanning your project for `database_config()` calls. Files found at the project root are *isolated*: they are not part of any package, so importing them normally would execute arbitrary code found by a filesystem scan. This plugin loads them under a restricted importer instead.
@@ -10,6 +14,8 @@ DBWarden discovers configuration by scanning your project for `database_config()
 |---|---|
 | `load_config_module` | Rejects path traversal and paths outside the project tree, then executes the file with a meta-path finder that permits only `dbwarden` imports. |
 | `load_model_module` | Rejects path traversal. Model paths are user-declared in `database_config()`, so they import normally otherwise. |
+| `sandbox_provider_start` | Starts a testcontainers database for the configured `database_type` (PostgreSQL, MySQL, ClickHouse) and returns the connection URL and container id. |
+| `sandbox_provider_stop` | Tears down the running testcontainers database. |
 
 An isolated config file that imports anything but `dbwarden` raises `SecurityError`. Config files that live inside your application package are imported normally, since they are already part of code you ship. Set `DBWARDEN_DISABLE_SANDBOX=1` to fall back to a plain import when debugging.
 
