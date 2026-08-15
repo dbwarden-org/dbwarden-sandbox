@@ -4,9 +4,9 @@
 [![PyPI](https://img.shields.io/pypi/v/dbwarden-sandbox?logo=pypi&logoColor=white&style=for-the-badge)](https://pypi.org/project/dbwarden-sandbox/)
 [![CI](https://img.shields.io/github/actions/workflow/status/dbwarden-org/dbwarden-sandbox/test.yml?logo=github&logoColor=white&style=for-the-badge)](https://github.com/dbwarden-org/dbwarden-sandbox/actions/workflows/test.yml)
 
-Sandboxed config and model loading for [DBWarden](https://github.com/dbwarden-org/dbwarden).
+Sandboxed config and model loading for [dbwarden](https://github.com/dbwarden-org/dbwarden).
 
-DBWarden discovers configuration by scanning your project for `database_config()` calls. Files found at the project root are *isolated*: they are not part of any package, so importing them normally would execute arbitrary code found by a filesystem scan. This plugin loads them under a restricted importer instead.
+dbwarden discovers configuration by scanning your project for `database_config()` calls. Files found at the project root are *isolated*: they are not part of any package, so importing them normally would execute arbitrary code found by a filesystem scan. This plugin loads them under a restricted importer instead.
 
 ## Hooks
 
@@ -27,7 +27,7 @@ dbwarden plugin add dbwarden-sandbox
 
 ## Trust tier
 
-This is an **official** DBWarden plugin. Its distribution name is classified before any of its code is imported, and `dbwarden plugin add` verifies the PyPI Trusted-Publishing attestation (PEP 740) against `dbwarden-org/dbwarden-sandbox` before installing. It loads automatically once installed, with no `dbwarden plugin trust` step.
+This is an **official** dbwarden plugin. Its distribution name is classified before any of its code is imported, and `dbwarden plugin add` verifies the PyPI Trusted-Publishing attestation (PEP 740) against `dbwarden-org/dbwarden-sandbox` before installing. It loads automatically once installed, with no `dbwarden plugin trust` step.
 
 ## Development
 
@@ -36,7 +36,7 @@ uv venv && uv pip install -e . -e ../dbwarden pytest
 pytest -q
 ```
 
-The `tests/test_conformance.py` suite runs DBWarden's shared conformance harness (`dbwarden.plugin_conformance`): entry point resolution, no import-time side effects, hook signatures, public-API-only imports, and idempotent `setup()`.
+The `tests/test_conformance.py` suite runs dbwarden's shared conformance harness (`dbwarden.plugin_conformance`): entry point resolution, no import-time side effects, hook signatures, public-API-only imports, and idempotent `setup()`.
 
 ## License
 

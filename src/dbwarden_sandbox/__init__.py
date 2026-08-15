@@ -13,7 +13,7 @@ from dbwarden_sandbox.sandbox import (
 
 __version__ = "0.1.0"
 
-# The DBWarden plugin contract this package targets. Core refuses to load a
+# The dbwarden plugin contract this package targets. Core refuses to load a
 # plugin declaring a version it does not provide, so a mismatched pairing fails
 # at load with one clear message instead of somewhere inside a migration.
 DBWARDEN_PLUGIN_API = 1
