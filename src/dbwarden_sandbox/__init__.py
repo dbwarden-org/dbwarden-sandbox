@@ -11,7 +11,7 @@ from dbwarden_sandbox.sandbox import (
     validate_path,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # The dbwarden plugin contract this package targets. Core refuses to load a
 # plugin declaring a version it does not provide, so a mismatched pairing fails
