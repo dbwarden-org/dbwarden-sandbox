@@ -1,9 +1,11 @@
+import ast
 import logging
 import os
 import sys
 from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Optional, Set
 
 from dbwarden.exceptions import ConfigurationError
@@ -27,13 +29,7 @@ class SecurityError(ConfigurationError):
 
 
 class RestrictedFileLoader(Loader):
-    """
-    Sandboxed file loader that restricts imports in loaded modules.
-
-    Only allows:
-    - Importing dbwarden and its submodules
-    - Loading files within the project tree
-    """
+    """Legacy loader API that parses declarations without executing source."""
 
     _base_dir: Path
     _filepath: str
@@ -45,15 +41,9 @@ class RestrictedFileLoader(Loader):
     def create_module(self, spec: ModuleSpec) -> None:
         return None
 
-    def exec_module(self, module: ModuleSpec) -> None:
-        # Read the source code from the file
-        with open(self._filepath, "r") as f:
-            source = f.read()
-        
-        # Compile and execute in restricted globals
+    def exec_module(self, module: ModuleType) -> None:
         module.__loader__ = self
-        code = compile(source, self._filepath, "exec")
-        exec(code, module.__dict__)
+        _load_config_declarations(Path(self._filepath))
 
     def find_module(
         self, fullname: str, path: str | None = None, target: ModuleSpec | None = None
@@ -182,82 +172,83 @@ def validate_model_path(path: Path, base_dir: Path) -> None:
 
 
 def load_config_module(path: Path, base_dir: Path) -> None:
-    """
-    Load a config module with security checks.
+    """Load literal ``database_config`` declarations from an isolated config.
 
-    Args:
-        path: Path to config file (e.g., dbwarden.py)
-        base_dir: Project root directory
-
-    Raises:
-        SecurityError: If path is invalid or import is disallowed
-        ConfigurationError: If loading fails
+    Isolated files are discovered from the filesystem and are therefore treated
+    as untrusted input.  They are parsed, never executed: only a docstring, an
+    optional ``from dbwarden import database_config`` statement, and direct
+    calls with literal keyword values are accepted.
     """
-    # Validate path before loading
     validate_path(path, base_dir)
-
-    # Check DBWARDEN_DISABLE_SANDBOX env var (for debugging)
-    if os.environ.get("DBWARDEN_DISABLE_SANDBOX"):
-        # Fall back to unsafe loading
-        _unsafe_load(path)
-        return
-
-    # Use sandboxed loader
     _sandboxed_load(path, base_dir)
 
 
 def _sandboxed_load(path: Path, base_dir: Path) -> None:
-    """Load module in sandbox."""
-    import importlib.util
-
-    module_name = f"_dbwarden_config_{abs(hash(str(path)))}"
-    filepath = str(path)
-
-    # Register the restricted module finder to block non-dbwarden imports
-    finder = RestrictedModuleFinder(base_dir)
-    sys.meta_path.insert(0, finder)
-
-    # Create restricted file loader with filepath
-    file_loader = RestrictedFileLoader(filepath, base_dir)
-
-    # Create spec with restricted loader
-    spec = ModuleSpec(
-        module_name,
-        file_loader,
-        origin=filepath,
-    )
-
-    # Create and execute module
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-
     try:
-        spec.loader.exec_module(module)
+        _load_config_declarations(path)
     except SecurityError:
         raise
     except Exception as e:
         raise ConfigurationError(f"Failed to load config from {path}: {e}") from e
-    finally:
-        # Clean up sys.modules and meta_path
-        if module_name in sys.modules:
-            del sys.modules[module_name]
-        if finder in sys.meta_path:
-            sys.meta_path.remove(finder)
 
 
-def _unsafe_load(path: Path) -> None:
-    """Unsandboxed load (for debugging)."""
-    import importlib.util
+def _load_config_declarations(path: Path) -> None:
+    """Validate and register the literal declarations in *path*."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as e:
+        raise SecurityError(f"Could not parse isolated config {path}: {e}") from e
 
-    path = Path(path)
-    module_name = f"_dbwarden_config_{abs(hash(str(path)))}"
-    spec = importlib.util.spec_from_file_location(module_name, path)
+    from dbwarden import database_config
 
-    if spec is None or spec.loader is None:
-        raise ConfigurationError(f"Could not load config source: {path}")
+    declarations = []
+    for statement in tree.body:
+        if _is_docstring(statement) or _is_database_config_import(statement):
+            continue
+        if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+            raise SecurityError(
+                "Isolated config files may contain only literal database_config() declarations."
+            )
+        call = statement.value
+        if not _is_database_config_call(call):
+            raise SecurityError(
+                "Isolated config files may call only database_config() directly."
+            )
+        if call.args or any(keyword.arg is None for keyword in call.keywords):
+            raise SecurityError("database_config() declarations must use literal keyword arguments.")
+        try:
+            values = {keyword.arg: ast.literal_eval(keyword.value) for keyword in call.keywords}
+        except ValueError as e:
+            raise SecurityError(
+                "database_config() declarations may contain only literal values."
+            ) from e
+        declarations.append(values)
 
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    for values in declarations:
+        database_config(**values)
+
+
+def _is_docstring(statement: ast.stmt) -> bool:
+    return (
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Constant)
+        and isinstance(statement.value.value, str)
+    )
+
+
+def _is_database_config_import(statement: ast.stmt) -> bool:
+    return (
+        isinstance(statement, ast.ImportFrom)
+        and statement.module == "dbwarden"
+        and statement.level == 0
+        and len(statement.names) == 1
+        and statement.names[0].name == "database_config"
+        and statement.names[0].asname is None
+    )
+
+
+def _is_database_config_call(call: ast.Call) -> bool:
+    return isinstance(call.func, ast.Name) and call.func.id == "database_config"
 
 
 def _module_name_for_path(filepath: Path, base_dir: Path) -> str:

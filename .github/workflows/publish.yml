@@ -4,21 +4,34 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
 
-      - name: Build package
-        run: uv build
+      - name: Install locked test dependencies
+        run: uv sync --locked --dev
+
+      - name: Verify release version and test package
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: VERSION="$(uv run python -c 'import dbwarden_sandbox; print(dbwarden_sandbox.__version__)')" && test "v$VERSION" = "$RELEASE_TAG" && uv run pytest
+
+      - name: Build and validate package
+        run: uv build && python -m zipfile -t dist/*.whl && tar -tzf dist/*.tar.gz > /dev/null
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
@@ -34,10 +47,10 @@ jobs:
       id-token: write
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

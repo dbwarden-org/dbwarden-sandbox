@@ -91,7 +91,7 @@ class TestConfigSandboxClassification:
             )
             from dbwarden_sandbox import SecurityError
 
-            with pytest.raises(SecurityError, match=f"Import '{banned_mod}' not allowed"):
+            with pytest.raises(SecurityError, match="only literal database_config"):
                 get_config()
         finally:
             os.chdir(old_cwd)
@@ -145,7 +145,7 @@ class TestConfigSandboxClassification:
             )
             from dbwarden_sandbox import SecurityError
 
-            with pytest.raises(SecurityError, match=f"Import '{banned_mod}' not allowed"):
+            with pytest.raises(SecurityError, match="only literal database_config"):
                 get_config()
         finally:
             os.chdir(old_cwd)
@@ -283,5 +283,4 @@ class TestConfigSandboxClassification:
             os.chdir(old_cwd)
             import shutil
             shutil.rmtree(str(tmp), ignore_errors=True)
-
 

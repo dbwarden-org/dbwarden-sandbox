@@ -89,41 +89,54 @@ class TestLoadConfigModule:
         )
         load_config_module(config, project)
 
-    def test_disallowed_import_raises_security_error(self, project: Path) -> None:
-        banned = _unused_module_name()
+    def test_imports_are_rejected_without_execution(self, project: Path) -> None:
+        sentinel = project / "executed"
         config = project / "dbwarden.py"
-        config.write_text(f"import {banned}\n")
-        with pytest.raises(SecurityError, match=f"Import '{banned}' not allowed"):
+        config.write_text(f"import os\nopen({str(sentinel)!r}, 'w').write('unsafe')\n")
+        with pytest.raises(SecurityError, match="only literal database_config"):
             load_config_module(config, project)
+        assert not sentinel.exists()
 
-    def test_other_failures_surface_as_configuration_error(self, project: Path) -> None:
+    def test_non_declaration_code_is_rejected(self, project: Path) -> None:
         config = project / "dbwarden.py"
         config.write_text("raise ValueError('boom')\n")
-        with pytest.raises(ConfigurationError, match="Failed to load config"):
+        with pytest.raises(SecurityError, match="only literal database_config"):
             load_config_module(config, project)
 
     def test_module_is_not_left_in_sys_modules(self, project: Path) -> None:
         config = project / "dbwarden.py"
-        config.write_text("x = 1\n")
+        config.write_text(
+            "database_config(database_name='primary', "
+            "database_url_sync='sqlite:///./test.db')\n"
+        )
         before = set(sys.modules)
         load_config_module(config, project)
         assert {n for n in set(sys.modules) - before if n.startswith("_dbwarden_config_")} == set()
 
-    def test_finder_is_removed_from_meta_path(self, project: Path) -> None:
+    def test_loader_does_not_modify_meta_path(self, project: Path) -> None:
         config = project / "dbwarden.py"
-        config.write_text(f"import {_unused_module_name()}\n")
+        config.write_text(
+            "database_config(database_name='primary', "
+            "database_url_sync='sqlite:///./test.db')\n"
+        )
         depth = len(sys.meta_path)
-        with pytest.raises(SecurityError):
-            load_config_module(config, project)
+        load_config_module(config, project)
         assert len(sys.meta_path) == depth
 
-    def test_disable_sandbox_env_var_falls_back_to_plain_import(
+    def test_disable_sandbox_env_var_does_not_enable_execution(
         self, project: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("DBWARDEN_DISABLE_SANDBOX", "1")
         config = project / "dbwarden.py"
         config.write_text("import os\n\nSENTINEL = os.sep\n")
-        load_config_module(config, project)  # would raise SecurityError when sandboxed
+        with pytest.raises(SecurityError):
+            load_config_module(config, project)
+
+    def test_non_literal_argument_is_rejected(self, project: Path) -> None:
+        config = project / "dbwarden.py"
+        config.write_text("database_config(database_name=__import__('os').getcwd())\n")
+        with pytest.raises(SecurityError, match="only literal values"):
+            load_config_module(config, project)
 
 
 class TestLoadModelModule:

@@ -2,6 +2,9 @@ name: tests
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -14,7 +17,7 @@ jobs:
         python-version: ["3.12.7", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -22,10 +25,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked --dev
 
       - name: Run tests
         run: uv run pytest --cov --cov-branch --cov-report=xml
+
+      - name: Build and validate distribution
+        run: uv build && python -m zipfile -t dist/*.whl && tar -tzf dist/*.tar.gz > /dev/null
 
       # Optional. Without a CODECOV_TOKEN secret this step is skipped rather
       # than failing the run, so it is safe to leave in place.

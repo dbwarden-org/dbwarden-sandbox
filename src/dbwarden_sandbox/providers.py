@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import importlib
+from threading import RLock
 from typing import Any
 
 
 _current_provider: Any = None
+_provider_lock = RLock()
 
 
 class _TestcontainersProvider:
@@ -20,20 +23,22 @@ class _TestcontainersProvider:
             raise RuntimeError("Sandbox already started. Call stop() first.")
         if self.CONTAINER_CLS is None:
             raise RuntimeError("CONTAINER_CLS not set for this provider.")
-        import importlib
         module = importlib.import_module(self.CONTAINER_MODULE)
         cls = getattr(module, self.CONTAINER_CLS)
         self._container = cls()
-        self._container.start()
-        return self._build_url()
+        try:
+            self._container.start()
+            return self._build_url()
+        except Exception:
+            self.stop()
+            raise
 
     def stop(self) -> None:
         if self._container is not None:
             try:
                 self._container.stop()
-            except Exception:
-                pass
-            self._container = None
+            finally:
+                self._container = None
 
     def get_database_type(self) -> str:
         return self.DB_TYPE
@@ -74,14 +79,6 @@ class MySQLTestcontainersProvider(_TestcontainersProvider):
         return self._container.get_connection_url()
 
 
-_HAS_TESTCONTAINERS: bool = False
-try:
-    import testcontainers  # noqa: F401
-    _HAS_TESTCONTAINERS = True
-except ImportError:
-    pass
-
-
 def create_sandbox_provider(database_type: str) -> _TestcontainersProvider:
     if database_type == "clickhouse":
         return ClickHouseTestcontainersProvider()
@@ -95,23 +92,28 @@ def create_sandbox_provider(database_type: str) -> _TestcontainersProvider:
 def sandbox_provider_start_hook(database_type: str) -> tuple[str, str] | None:
     if database_type == "sqlite":
         return None
-    if not _HAS_TESTCONTAINERS:
-        return None
     global _current_provider
-    try:
-        provider = create_sandbox_provider(database_type)
-        url = provider.start()
+    with _provider_lock:
+        if _current_provider is not None:
+            raise RuntimeError("A sandbox provider is already running. Call stop() first.")
+        try:
+            importlib.import_module("testcontainers")
+            provider = create_sandbox_provider(database_type)
+            url = provider.start()
+        except ModuleNotFoundError as e:
+            if e.name and (e.name == "testcontainers" or e.name.startswith("testcontainers.")):
+                return None
+            raise
+        except ValueError:
+            return None
         _current_provider = provider
         return url, provider.get_database_type()
-    except (ImportError, ValueError):
-        return None
 
 
 def sandbox_provider_stop_hook() -> None:
     global _current_provider
-    if _current_provider is not None:
-        try:
-            _current_provider.stop()
-        except Exception:
-            pass
+    with _provider_lock:
+        provider = _current_provider
         _current_provider = None
+        if provider is not None:
+            provider.stop()
